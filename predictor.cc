@@ -21,15 +21,31 @@
 #define INFO2 4
 #define HAPPY_FUN_BALL 5
 
-define debug(w,s,args...) { if (w <= DEBUG_LEVEL) { fprintf(stderr, s,##args); } }
-
 typedef uint16_t PathHistory; // a 3 bytes value of path history
 typedef unsigned int PC;      // matching tread.h
 
-static uint8_t DEBUG_FLAG = CRIT;
+/*** Debugging ***/
+define debug(w,s,args...) { if (w <= DEBUG_LEVEL) { fprintf(stderr, s,##args); } }
+
+#ifndef DEFAULT_DEBUG
+#define DEFAULT_DEBUG CRIT
+#endif
+
+static uint8_t DEBUG_FLAG = DEFAULT_DEBUG;
+
+/*** Saturation Counter Macros ***/
+#define MAX(a,b) { (a > b ? a : b) }
+#define MIN(a,b) { (a < b ? a : b) }
+
+#define INC_SAT3(x) {  MAX(x,x + 1 & 0x7) }
+#define DEC_SAT3(x) {  MIN(x,x - 1 & 0x7) }
+#define SAT3_IS_HIGH(x) { (x >= 4) }
+
+#define INC_SAT2(x) {  MAX(x, x + 1 & 0x3) }
+#define DEC_SAT2(x) {  MIN(x, x - 1 & 0x3) }
+#define SAT2_IS_HIGH(x) { (x >= 2) }
 
 /*** Globals (Tables used by the predictor) ***/
-
 
 // 10 bit pointers into the local predictor table
 static uint16_t gLocalHistoryTable[LocalHistoryTableSize];
@@ -67,20 +83,30 @@ uint8_t lookupLocalPrediction(uint16_t offset)
 uint8_t getLocalPrediction(PC x)
 {
   debug(INFO2, "Looking up the local prediction for PC: %0x\n", x);
-  lookupLocalPrediction( lookupLocalHistoryTable(x) );
+  return (lookupLocalPrediction( lookupLocalHistoryTable(x) ));
 }
 
 // Get the 2 bit global prediction based on path history
 uint8_t lookupGlobalPrediction(PathHistory x)
 {
   debug(INFO2, "Looking up the global prediction for history: %03x\n", x);
-  gGlobalPrediction[x];
+  return gGlobalPrediction[x];
+}
+
+uint8_t lookupGlobalPrediction()
+{
+  return gGlobalPrediction[gPathHistory];
 }
 
 uint8_t lookupChoicePrediction(PathHistory x)
 {
   debug(INFO2, "Looking up the choice prediction for history: %03x\n",x);
   return gLocalChoice[x];
+}
+
+uint8_t lookupChoicePrediction()
+{
+  return gLocalChoice[gPathHistory];
 }
 
 void updateChoicePrediction(const branch_record_c *br)
@@ -126,8 +152,6 @@ bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
     prediction = true;
   return prediction;   // true for taken, false for not taken
 }
-
-
 
 // Update the predictor after a prediction has been made.  This should accept
 // the branch record (br) and architectural state (os), as well as a third
