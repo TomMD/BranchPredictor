@@ -11,6 +11,22 @@
  *            result of a branch.
  */
 
+/* EXPECTED RESULTS (source: Faust)
+
+INT-1   < 7.4
+FP-1            < 3.4
+MM-1    < 8.9
+SERV-1  < 9.9 or 17.6 (depends on implementation details)
+
+LATEST RESULTS
+
+INT-1  7.3
+FP-1   3.36
+MM-1   8.425
+SERV-1 17.567
+
+*/
+
 #include <stdio.h>
 #include <stdint.h>
 #include "predictor.h"
