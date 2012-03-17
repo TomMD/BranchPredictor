@@ -1,7 +1,17 @@
 /* Author: Mark Faust; Thomas M. DuBuisson
  * Description: This file defines the two required functions for the branch predictor.
-*/
+ *
+ *
+ * Nomenclature:
+ *
+ * "lookup" - obtain a counter value from the associated global table.
+ *            These functions are sometimes overloaded.
+ * "get"    - obtain a boolean prediction by referencing the global tables.
+ * "update" - increment or decrement the associated global values using the actual
+ *            result of a branch.
+ */
 
+#include <stdio.h>
 #include <stdint.h>
 #include "predictor.h"
 
@@ -11,7 +21,7 @@
 #define GlobalPredictionSize (4096)
 #define ChoicePredictionSize (4096)
 
-#define PCtoLHistIdx(x) { (x & 0x3FF) }
+#define PCtoLHistIdx(x) (x & 0x3FF)
 
 // Debug levels
 #define CRIT  0
@@ -25,25 +35,25 @@ typedef uint16_t PathHistory; // a 3 bytes value of path history
 typedef unsigned int PC;      // matching tread.h
 
 /*** Debugging ***/
-define debug(w,s,args...) { if (w <= DEBUG_LEVEL) { fprintf(stderr, s,##args); } }
+#define debug(w,s,args...) { if (w <= DEBUG_LEVEL) { fprintf(stderr, s, ##args); } }
 
 #ifndef DEFAULT_DEBUG
 #define DEFAULT_DEBUG CRIT
 #endif
 
-static uint8_t DEBUG_FLAG = DEFAULT_DEBUG;
+static uint8_t DEBUG_LEVEL = DEFAULT_DEBUG;
 
 /*** Saturation Counter Macros ***/
-#define MAX(a,b) { (a > b ? a : b) }
-#define MIN(a,b) { (a < b ? a : b) }
+#define MAX(a,b) (a > b ? a : b)
+#define MIN(a,b) (a < b ? a : b)
 
-#define INC_SAT3(x) {  MAX(x,x + 1 & 0x7) }
-#define DEC_SAT3(x) {  MIN(x,x - 1 & 0x7) }
-#define SAT3_IS_HIGH(x) { (x >= 4) }
+#define INC_SAT3(x) (MAX(x, ((x + 1) & 0x7)))
+#define DEC_SAT3(x) (MIN(x, ((x - 1) & 0x7)))
+#define SAT3_IS_HIGH(x) (x >= 4)
 
-#define INC_SAT2(x) {  MAX(x, x + 1 & 0x3) }
-#define DEC_SAT2(x) {  MIN(x, x - 1 & 0x3) }
-#define SAT2_IS_HIGH(x) { (x >= 2) }
+#define INC_SAT2(x) (MAX(x, ((x + 1) & 0x3)))
+#define DEC_SAT2(x) (MIN(x, ((x - 1) & 0x3)))
+#define SAT2_IS_HIGH(x) (x >= 2)
 
 /*** Globals (Tables used by the predictor) ***/
 
@@ -68,7 +78,7 @@ static PathHistory gPathHistory;
 // arrays to be packed if needed.
 uint16_t lookupLocalHistoryTable(PC x)
 {
-  debug(INFO2, "Looking up the local history for PC of %0x\n", x);
+  //  debug(INFO2, "Looking up the local history for PC of %0x\n", x);
   return gLocalHistoryTable[PCtoLHistIdx(x)];
 }
 
@@ -76,11 +86,16 @@ uint16_t lookupLocalHistoryTable(PC x)
 uint8_t lookupLocalPrediction(uint16_t offset)
 {
   debug(INFO2, "Looking up the local prediction for offset: %d\n", offset);
-  return gLocalPrediction[offset]
+  return gLocalPrediction[offset];
+}
+
+bool getLocalPrediction(PC x)
+{
+  return (SAT3_IS_HIGH(lookupLocalPrediction(x)));
 }
 
 // Get the 3 bit local predictor by first getting this history from the LocalHistoryTable
-uint8_t getLocalPrediction(PC x)
+uint8_t lookupLocalPrediction(PC x)
 {
   debug(INFO2, "Looking up the local prediction for PC: %0x\n", x);
   return (lookupLocalPrediction( lookupLocalHistoryTable(x) ));
@@ -98,58 +113,93 @@ uint8_t lookupGlobalPrediction()
   return gGlobalPrediction[gPathHistory];
 }
 
-uint8_t lookupChoicePrediction(PathHistory x)
+bool getGlobalPrediction()
 {
-  debug(INFO2, "Looking up the choice prediction for history: %03x\n",x);
-  return gLocalChoice[x];
+  return (SAT2_IS_HIGH(lookupGlobalPrediction()));
 }
 
 uint8_t lookupChoicePrediction()
 {
-  return gLocalChoice[gPathHistory];
+  return gChoicePrediction[gPathHistory];
 }
 
-void updateChoicePrediction(const branch_record_c *br)
+// Assuming the gPathHistory has yet to be updated,
+// update the choice prediction
+void updateChoicePrediction(const branch_record_c *br, bool t)
 {
-  // TODO determine behavior of this predictor
+  bool g,l;
+  g = getGlobalPrediction();
+  l = getLocalPrediction(br->instruction_addr);
+
+  if (g /= l) {
+    if(g == t) { // global was correct
+      gChoicePrediction[gPathHistory] = INC_SAT2(gChoicePrediction[gPathHistory]);
+    } else { // local was correct
+      gChoicePrediction[gPathHistory] = DEC_SAT2(gChoicePrediction[gPathHistory]);
+    }
+  }
 }
 
-void updateGlobalPrediction(PathHistory x, const branch_record_c *br)
+void updateGlobalPrediction(bool t)
 {
-  // TODO gGlobalPrediction is a two bit saturation counter
+  if(t) {
+    gGlobalPrediction[gPathHistory] = INC_SAT2(gGlobalPrediction[gPathHistory]);
+  } else {
+    gGlobalPrediction[gPathHistory] = DEC_SAT2(gGlobalPrediction[gPathHistory]);
+  }
 }
 
-void updateLocalPrediction(uint16_t offset, const branch_record_c *br)
+// Assumes the local history table has not been updated yet!
+void updateLocalPrediction(PC x, bool t)
 {
-  uint8_t h = gLocalPrediction[offset];
-  // TODO this is a three bit preditor of unknown behavior
+  uint16_t lclHist = lookupLocalHistoryTable(x);
+
+  if(t) {
+    gLocalPrediction[lclHist] = INC_SAT3(gLocalPrediction[lclHist]);
+  } else {
+    gLocalPrediction[lclHist] = DEC_SAT3(gLocalPrediction[lclHist]);
+  }
+
 }
 
+// Maps the last ten bits of the PC to the 10 bit branch taken/not-taken history.
 void updateLocalHistoryTable(PC x, bool t)
 {
-  int idx = PCToLHistIdx(x);
+  int idx = PCtoLHistIdx(x);
   uint16_t h = 0;
   h = gLocalHistoryTable[idx];
   h = h << 1 | (t ? 1 : 0);
   h &= 0x3FF;
-  LocalHistoryTable[idx] = h;
+  gLocalHistoryTable[idx] = h;
 }
 
+void updateLocal(PC x, bool t)
+{
+  updateLocalPrediction(x,t);
+  updateLocalHistoryTable(x,t);
+}
+
+// This should be the last global to be updated!
 void updatePathHistory(bool t)
 {
-  gPathHistory = gPathHistory << 1 + (t ? 1 : 0);
+  gPathHistory = (gPathHistory << 1) + (t ? 1 : 0);
 }
 
 bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 {
-  /* replace this code with your own */
-  bool prediction = false;
+  bool prediction;
+  uint8_t c;
 
-  printf("%0x %0x %1d %1d %1d %1d ",br->instruction_addr,
-	 br->branch_target,br->is_indirect,br->is_conditional,
-	 br->is_call,br->is_return);
-  if (br->is_conditional)
-    prediction = true;
+  c = lookupChoicePrediction();
+  if(SAT2_IS_HIGH(c)) {
+    prediction = getGlobalPrediction();
+  } else {
+    prediction = getLocalPrediction(br->instruction_addr);
+  }
+
+  //  printf("%0x %0x %1d %1d %1d %1d ",br->instruction_addr,
+  //	 br->branch_target,br->is_indirect,br->is_conditional,
+  //	 br->is_call,br->is_return);
   return prediction;   // true for taken, false for not taken
 }
 
@@ -158,7 +208,8 @@ bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 // argument (taken) indicating whether or not the branch was taken.
 void PREDICTOR::update_predictor(const branch_record_c* br, const op_state_c* os, bool taken)
 {
-  /* replace this code with your own */
-  printf("%1d\n",taken);
-
+  updateChoicePrediction(br,taken);
+  updateLocal(br->instruction_addr,taken);
+  updateGlobalPrediction(taken);
+  updatePathHistory(taken);
 }
