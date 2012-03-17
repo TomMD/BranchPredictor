@@ -21,7 +21,7 @@
 #define GlobalPredictionSize (4096)
 #define ChoicePredictionSize (4096)
 
-#define PCtoLHistIdx(x) (x & 0x3FF)
+#define PCtoLHistIdx(x) (x & (LocalPredictionSize - 1))
 
 // Debug levels
 #define CRIT  0
@@ -172,7 +172,7 @@ void updateLocalHistoryTable(PC x, bool t)
   uint16_t h = 0;
   h = gLocalHistoryTable[idx];
   h = h << 1 | (t ? 1 : 0);
-  h &= 0x3FF;
+  h &= (LocalPredictionSize - 1);
   gLocalHistoryTable[idx] = h;
 }
 
@@ -185,7 +185,7 @@ void updateLocal(PC x, bool t)
 // This should be the last global to be updated!
 void updatePathHistory(bool t)
 {
-  gPathHistory = 0x3FF & ((gPathHistory << 1) + (t ? 1 : 0));
+  gPathHistory = (ChoicePredictionSize - 1) & ((gPathHistory << 1) + (t ? 1 : 0));
 }
 
 // TODO: Assuming all zero init.  All saturated HIGH might be the truth though...
@@ -195,7 +195,7 @@ static void init()
   int i;
   firstRun = false;
   for(i = 0; i < LocalHistoryTableSize; i++)
-    gLocalHistoryTable[i] = 0x3FF;
+    gLocalHistoryTable[i] = (LocalPredictionSize - 1);
 
   for(i=0; i < LocalPredictionSize; i++)
     gLocalPrediction[i] = 7;
@@ -206,7 +206,7 @@ static void init()
   for(i=0; i < ChoicePredictionSize; i++)
     gChoicePrediction[i] = 0;
 
-  gPathHistory = 0x3FF;
+  gPathHistory = ChoicePredictionSize - 1;
 #else
   int i;
   firstRun = false;
