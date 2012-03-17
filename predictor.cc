@@ -56,6 +56,7 @@ static uint8_t DEBUG_LEVEL = DEFAULT_DEBUG;
 #define SAT2_IS_HIGH(x) (x >= 2)
 
 /*** Globals (Tables used by the predictor) ***/
+static bool firstRun = true;
 
 // 10 bit pointers into the local predictor table
 static uint16_t gLocalHistoryTable[LocalHistoryTableSize];
@@ -78,27 +79,30 @@ static PathHistory gPathHistory;
 // arrays to be packed if needed.
 uint16_t lookupLocalHistoryTable(PC x)
 {
-  //  debug(INFO2, "Looking up the local history for PC of %0x\n", x);
+  debug(INFO2, "Looking up the local history for PC of %x\n", x);
   return gLocalHistoryTable[PCtoLHistIdx(x)];
 }
 
 // Get the 3 bit local predictor based on the history
+/*
 uint8_t lookupLocalPrediction(uint16_t offset)
 {
-  debug(INFO2, "Looking up the local prediction for offset: %d\n", offset);
-  return gLocalPrediction[offset];
+  let idx = PCtoLHistIdx(x);
+  debug(INFO2, "Looking up the local prediction for offset: %d\n", idx);
+  return gLocalPrediction[idx];
+}
+*/
+
+// Get the 3 bit local predictor by first getting this history from the LocalHistoryTable
+uint8_t lookupLocalPrediction(PC x)
+{
+  debug(INFO2, "Looking up the local prediction for PC: %x\n", x);
+  return (gLocalPrediction[lookupLocalHistoryTable(x)]);
 }
 
 bool getLocalPrediction(PC x)
 {
   return (SAT3_IS_HIGH(lookupLocalPrediction(x)));
-}
-
-// Get the 3 bit local predictor by first getting this history from the LocalHistoryTable
-uint8_t lookupLocalPrediction(PC x)
-{
-  debug(INFO2, "Looking up the local prediction for PC: %0x\n", x);
-  return (lookupLocalPrediction( lookupLocalHistoryTable(x) ));
 }
 
 // Get the 2 bit global prediction based on path history
@@ -128,10 +132,11 @@ uint8_t lookupChoicePrediction()
 void updateChoicePrediction(const branch_record_c *br, bool t)
 {
   bool g,l;
+
   g = getGlobalPrediction();
   l = getLocalPrediction(br->instruction_addr);
 
-  if (g /= l) {
+  if (g != l) {
     if(g == t) { // global was correct
       gChoicePrediction[gPathHistory] = INC_SAT2(gChoicePrediction[gPathHistory]);
     } else { // local was correct
@@ -182,13 +187,37 @@ void updateLocal(PC x, bool t)
 // This should be the last global to be updated!
 void updatePathHistory(bool t)
 {
-  gPathHistory = (gPathHistory << 1) + (t ? 1 : 0);
+  gPathHistory = 0x3FF & ((gPathHistory << 1) + (t ? 1 : 0));
+}
+
+// TODO: Assuming all zero init.  All saturated HIGH might be the truth though...
+static void init()
+{
+  int i;
+  firstRun = false;
+  for(i=0; i< LocalHistoryTableSize; i++)
+    gLocalHistoryTable[i] = 0;
+
+  for(i=0; i < LocalPredictionSize; i++)
+    gLocalPrediction[i] = 0;
+
+  for(i=0; i < GlobalPredictionSize; i++)
+    gGlobalPrediction[i] = 0;
+
+  for(i=0; i < ChoicePredictionSize; i++)
+    gChoicePrediction[i] = 0;
+
+  gPathHistory = 0;
 }
 
 bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 {
   bool prediction;
   uint8_t c;
+
+  return true;
+
+  if(firstRun) init();
 
   c = lookupChoicePrediction();
   if(SAT2_IS_HIGH(c)) {
@@ -208,6 +237,8 @@ bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 // argument (taken) indicating whether or not the branch was taken.
 void PREDICTOR::update_predictor(const branch_record_c* br, const op_state_c* os, bool taken)
 {
+  if(firstRun) init();
+
   updateChoicePrediction(br,taken);
   updateLocal(br->instruction_addr,taken);
   updateGlobalPrediction(taken);
