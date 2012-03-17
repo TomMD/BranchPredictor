@@ -34,6 +34,14 @@
 typedef uint16_t PathHistory; // a 3 bytes value of path history
 typedef unsigned int PC;      // matching tread.h
 
+// When defined, assume a default of:
+// - "strongly local" forall path histories
+// - "strongly taken" forall local predictions
+// - "strongly taken" forall global predictions
+// - "all taken" forall local history table entries
+// - "all taken" for gPathHistory
+#define SET_COUNTERS_OPT1
+
 /*** Debugging ***/
 #define debug(w,s,args...) { if (w <= DEBUG_LEVEL) { fprintf(stderr, s, ##args); } }
 
@@ -183,6 +191,23 @@ void updatePathHistory(bool t)
 // TODO: Assuming all zero init.  All saturated HIGH might be the truth though...
 static void init()
 {
+#ifdef SET_COUNTERS_OPT1
+  int i;
+  firstRun = false;
+  for(i = 0; i < LocalHistoryTableSize; i++)
+    gLocalHistoryTable[i] = 0x3FF;
+
+  for(i=0; i < LocalPredictionSize; i++)
+    gLocalPrediction[i] = 7;
+
+  for(i=0; i < GlobalPredictionSize; i++)
+    gGlobalPrediction[i] = 3;
+
+  for(i=0; i < ChoicePredictionSize; i++)
+    gChoicePrediction[i] = 0;
+
+  gPathHistory = 0x3FF;
+#else
   int i;
   firstRun = false;
   for(i=0; i< LocalHistoryTableSize; i++)
@@ -198,14 +223,13 @@ static void init()
     gChoicePrediction[i] = 0;
 
   gPathHistory = 0;
+#endif
 }
 
 bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 {
   bool prediction;
   uint8_t c;
-
-  return true;
 
   if(firstRun) init();
 
