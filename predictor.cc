@@ -83,16 +83,6 @@ uint16_t lookupLocalHistoryTable(PC x)
   return gLocalHistoryTable[PCtoLHistIdx(x)];
 }
 
-// Get the 3 bit local predictor based on the history
-/*
-uint8_t lookupLocalPrediction(uint16_t offset)
-{
-  let idx = PCtoLHistIdx(x);
-  debug(INFO2, "Looking up the local prediction for offset: %d\n", idx);
-  return gLocalPrediction[idx];
-}
-*/
-
 // Get the 3 bit local predictor by first getting this history from the LocalHistoryTable
 uint8_t lookupLocalPrediction(PC x)
 {
