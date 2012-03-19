@@ -249,11 +249,15 @@ bool PREDICTOR::get_prediction(const branch_record_c* br, const op_state_c* os)
 
   if(firstRun) init();
 
-  c = lookupChoicePrediction();
-  if(SAT2_IS_HIGH(c)) {
-    prediction = getGlobalPrediction();
+  if (!br->is_conditional) {
+    prediction = true;
   } else {
-    prediction = getLocalPrediction(br->instruction_addr);
+    c = lookupChoicePrediction();
+    if(SAT2_IS_HIGH(c)) {
+      prediction = getGlobalPrediction();
+    } else {
+      prediction = getLocalPrediction(br->instruction_addr);
+    }
   }
 
   //  printf("%0x %0x %1d %1d %1d %1d ",br->instruction_addr,
