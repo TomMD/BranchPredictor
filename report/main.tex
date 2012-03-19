@@ -1,0 +1,66 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,verbatim,multicol}
+\usepackage[compact]{titlesec}
+
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+
+\title{Alpha 21264 Branch Predictor}
+\author{Thomas DuBuisson and Garrett Morris}
+\date{March 19, 2012}
+
+\begin{document}
+\maketitle
+
+This document describes our simulation of the Alpha 21264 branch predictor.  It summarizes our
+interpretation of the branch prediction algorithm, our implementation, and the results on the
+provided trace files.
+
+\section{Algorithm}
+
+We implement a tournament branch predictor using both local and global branch histories.  The global
+history maps 12 bits of branch history to a two-bit saturating counter, used for prediction.  The
+local histories consist of a 2-stage mapping: first, the last 10 bits of the PC are mapped to 10
+bits of local branch history.  Each local branch history is then mapped to a three-bit saturating
+counter, used for prediction.  Finally, we store a choice prediction table, mapping the global path
+history (12 bits) to a two-bit saturating counter, which tracks whether the global or local path
+histories are more likely to be accurate for particular paths.  This table is used to choose between
+the global and local prediction for each individual branch.
+
+\section{Implementation}
+
+Our implementation stores both 2- and 3-bit saturating counters in 8-bit unsigned integers; we use a
+standard set of macros to perform counter operations on the 8-bit values.  We represent the 12-bit
+path history using a 16-bit unsigned value.
+
+On the first invocation of the predictor, we initialize all global and local histories.  Depending
+on compile-time options, we initialize all histories to either strongly not-taken (0) or
+strongly-taken (3 or 7, depending on counter size).  We initialize all choice histories to strongly
+local (0), and initialize the path history to either all not taken or all taken.
+
+Our space usage is as follows:
+
+\begin{tabular}{|l|r|}
+\hline
+\it Table & \it Size (bytes) \\
+\hline
+Local history table & $1024 \times 16 = 16384$ \\
+Local predictors & $1024 \times 8 = 8192$ \\
+Global predictors & $4096 \times 8 = 32768$ \\
+Choice predictors & $4096 \times 8 = 32768$ \\
+\it Total & \it 90112 \\
+\hline
+\end{tabular}
+
+\section{Results}
+
+\begin{tabular}{|l|rrrr|}
+\hline
+\it Trace & \it Score & \it Branches & \it CC Branches & \it Predictions \\
+\hline
+\input{../table.tex}
+\hline
+\end{tabular}
+
+\end{document}
