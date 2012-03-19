@@ -39,17 +39,19 @@ on compile-time options, we initialize all histories to either strongly not-take
 strongly-taken (3 or 7, depending on counter size).  We initialize all choice histories to strongly
 local (0), and initialize the path history to either all not taken or all taken.
 
-Our space usage is as follows:
+Our space usage is as follows, where all lines but the total are in bits:
 
-\begin{tabular}{|l|r|}
+\begin{tabular}{|l|r|rr|rr|}
 \hline
-\it Table & \it Size (bytes) \\
+\it Table & \it Cells & \multicolumn{2}{|c|}{\it Cell size} & \multicolumn{2}{|c|}{\it Total size} \\
+ & & \it needed & \it used & \it needed & \it used \\
 \hline
-Local history table & $1024 \times 16 = 16384$ \\
-Local predictors & $1024 \times 8 = 8192$ \\
-Global predictors & $4096 \times 8 = 32768$ \\
-Choice predictors & $4096 \times 8 = 32768$ \\
-\it Total & \it 90112 \\
+Local history table & 1024 & 10 & 16 & 10240 & 16384 \\
+Local predictors & 1024 & 3 & 8 & 3072 & 8192 \\
+Global predictors & 4096 & 2 & 8 & 8192 & 32768 \\
+Choice predictors & 4096 & 2 & 8 & 8192 & 32768 \\
+\hline
+\multicolumn{4}{|l|}{\it Total (bytes)} & \it 3712 & \it 11264 \\
 \hline
 \end{tabular}
 
